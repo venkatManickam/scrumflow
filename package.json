@@ -1,12 +1,14 @@
 {
   "name": "scrumflow",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "lint": "oxlint",
+    "test": "vitest run",
+    "lint": "oxlint src",
+    "typecheck": "tsc --noEmit -p tsconfig.app.json",
     "preview": "vite preview"
   },
   "dependencies": {

@@ -7,6 +7,12 @@ import { dayKey, daysBetween, sprintDays } from './dates'
 export const pts = (i: Pick<WorkItem, 'points'>): number => i.points ?? 0
 export const sumPoints = (items: Pick<WorkItem, 'points'>[]): number => items.reduce((a, i) => a + pts(i), 0)
 
+/** True when a non-empty set has no estimates at all (e.g. work migrated from an action tracker). */
+export const isUnestimated = (items: Pick<WorkItem, 'points'>[]): boolean => items.length > 0 && items.every((i) => !i.points)
+/** Weight function for a set: story points normally, 1 per item when nothing is estimated so progress stays measurable. */
+export const weightOf = (items: Pick<WorkItem, 'points'>[]): ((i: Pick<WorkItem, 'points'>) => number) => (isUnestimated(items) ? () => 1 : pts)
+export const sumWeights = (items: Pick<WorkItem, 'points'>[], w: (i: Pick<WorkItem, 'points'>) => number): number => items.reduce((a, i) => a + w(i), 0)
+
 /** Items that count towards a sprint's scope (epics are containers, never sprint work). */
 export function sprintItems(sprint: Pick<Sprint, 'id'>, items: WorkItem[]): WorkItem[] {
   return items.filter((i) => i.sprintId === sprint.id && i.type !== 'epic')
@@ -34,12 +40,14 @@ export interface BurndownPoint {
 
 export function burndown(sprint: Sprint, items: WorkItem[], today: string = dayKey()): BurndownPoint[] {
   const its = sprintItems(sprint, items)
+  const w = weightOf(its)
+  const unestimated = isUnestimated(its)
   const days = sprintDays(sprint.startDate, sprint.endDate)
-  const initialScope = sprint.committedPoints ?? sumPoints(its.filter((i) => !i.sprintAddedAt || dayKey(i.sprintAddedAt) <= sprint.startDate))
+  const initialScope = !unestimated && sprint.committedPoints !== undefined ? sprint.committedPoints : sumWeights(its.filter((i) => !i.sprintAddedAt || dayKey(i.sprintAddedAt) <= sprint.startDate), w)
   const steps = Math.max(days.length - 1, 1)
   return days.map((date, idx) => {
-    const scope = sumPoints(its.filter((i) => !i.sprintAddedAt || dayKey(i.sprintAddedAt) <= date))
-    const done = sumPoints(its.filter((i) => isDone(i) && i.completedAt && dayKey(i.completedAt) <= date))
+    const scope = sumWeights(its.filter((i) => !i.sprintAddedAt || dayKey(i.sprintAddedAt) <= date), w)
+    const done = sumWeights(its.filter((i) => isDone(i) && i.completedAt && dayKey(i.completedAt) <= date), w)
     const ideal = Math.max(0, Math.round((initialScope * (1 - idx / steps)) * 10) / 10)
     const actual = date <= today ? Math.max(0, scope - done) : null
     return { date, ideal, actual, scope }
@@ -89,16 +97,18 @@ export interface SprintCompletion {
 
 export function sprintCompletion(sprint: Sprint, items: WorkItem[]): SprintCompletion {
   const its = sprintItems(sprint, items)
+  const w = weightOf(its)
+  const unestimated = isUnestimated(its)
   const added = its.filter((i) => i.sprintAddedAt && dayKey(i.sprintAddedAt) > sprint.startDate)
   const doneItems = its.filter(isDone)
-  const committed = sprint.committedPoints ?? sumPoints(its) - sumPoints(added)
-  const completed = sprint.completedPoints ?? sumPoints(doneItems)
+  const committed = !unestimated && sprint.committedPoints !== undefined ? sprint.committedPoints : sumWeights(its, w) - sumWeights(added, w)
+  const completed = !unestimated && sprint.completedPoints !== undefined ? sprint.completedPoints : sumWeights(doneItems, w)
   return {
     committed,
     completed,
-    remaining: Math.max(0, sumPoints(its) - sumPoints(doneItems)),
-    addedDuringSprint: sumPoints(added),
-    carriedOver: sumPoints(its.filter((i) => !isDone(i))),
+    remaining: Math.max(0, sumWeights(its, w) - sumWeights(doneItems, w)),
+    addedDuringSprint: sumWeights(added, w),
+    carriedOver: sumWeights(its.filter((i) => !isDone(i)), w),
     items: { total: its.length, done: doneItems.length },
   }
 }
@@ -118,12 +128,13 @@ export interface WorkloadRow {
 
 export function workload(sprint: Pick<Sprint, 'id'> | undefined, items: WorkItem[], members: Member[]): WorkloadRow[] {
   const its = sprint ? sprintItems(sprint, items) : items.filter((i) => i.type !== 'epic' && !isDone(i))
+  const w = weightOf(its)
   return members
     .filter((m) => m.active)
     .map((m) => {
       const mine = its.filter((i) => i.assigneeId === m.id)
-      const assigned = sumPoints(mine)
-      const done = sumPoints(mine.filter(isDone))
+      const assigned = sumWeights(mine, w)
+      const done = sumWeights(mine.filter(isDone), w)
       return {
         member: m,
         assigned,
@@ -193,9 +204,12 @@ export function sprintHealth(
   today: string = dayKey(),
 ): SprintHealth {
   const its = sprintItems(sprint, items)
+  const w = weightOf(its)
+  const unestimated = isUnestimated(its)
+  const unit = unestimated ? 'items' : 'SP'
   const comp = sprintCompletion(sprint, items)
-  const totalScope = sumPoints(its)
-  const completed = sumPoints(its.filter(isDone))
+  const totalScope = sumWeights(its, w)
+  const completed = sumWeights(its.filter(isDone), w)
   const remaining = Math.max(0, totalScope - completed)
   const totalDays = Math.max(1, daysBetween(sprint.startDate, sprint.endDate) + 1)
   /** Days fully elapsed before today; today counts as a remaining day. */
@@ -214,7 +228,7 @@ export function sprintHealth(
   const projectedShortfall = Math.max(0, totalScope - projectedCompleted)
 
   const blocked = its.filter((i) => i.blocked || i.status === 'blocked')
-  const blockedPoints = sumPoints(blocked)
+  const blockedPoints = sumWeights(blocked, w)
   const overdue = its.filter((i) => !isDone(i) && i.dueDate && i.dueDate < today)
   const notStarted = its.filter((i) => !isDone(i) && !isStarted(i))
   const wl = workload(sprint, items, members.filter((m) => m.active))
@@ -223,8 +237,8 @@ export function sprintHealth(
 
   const atRisk = its
     .filter((i) => !isDone(i))
-    .filter((i) => i.blocked || i.status === 'blocked' || (i.dueDate && i.dueDate < today) || (!isStarted(i) && timePct >= 50 && pts(i) >= 5) || overloaded.some((o) => o.member.id === i.assigneeId))
-    .sort((a, b) => pts(b) - pts(a))
+    .filter((i) => i.blocked || i.status === 'blocked' || (i.dueDate && i.dueDate < today) || (!isStarted(i) && timePct >= 50 && (unestimated || pts(i) >= 5)) || overloaded.some((o) => o.member.id === i.assigneeId))
+    .sort((a, b) => w(b) - w(a))
 
   // Risk scoring
   let score = 100
@@ -246,29 +260,30 @@ export function sprintHealth(
   const moveCandidates: WorkItem[] = []
 
   if (sprint.status === 'active') {
-    findings.push(`${completed} of ${totalScope} SP done (${progressPct}%) with ${timePct}% of the sprint elapsed — ${daysLeft} day${daysLeft === 1 ? '' : 's'} left.`)
-    if (expectedPerDay > 0) findings.push(`Team needs ${requiredPerDay} SP/day to finish; recent pace is ${expectedPerDay} SP/day.`)
-    if (projectedShortfall > 0) findings.push(`At the current pace roughly ${projectedShortfall} SP will not be finished.`)
-    if (blocked.length) findings.push(`${blocked.length} blocked item${blocked.length === 1 ? '' : 's'} holding ${blockedPoints} SP.`)
-    if (comp.addedDuringSprint > 0) findings.push(`${comp.addedDuringSprint} SP were added after the sprint started (scope creep).`)
+    if (unestimated) findings.push('No story points on any item — health is computed by item count. Estimate at sprint planning to get real burndown and velocity.')
+    findings.push(`${completed} of ${totalScope} ${unit} done (${progressPct}%) with ${timePct}% of the sprint elapsed — ${daysLeft} day${daysLeft === 1 ? '' : 's'} left.`)
+    if (expectedPerDay > 0) findings.push(`Team needs ${requiredPerDay} ${unit}/day to finish; recent pace is ${expectedPerDay} ${unit}/day.`)
+    if (projectedShortfall > 0) findings.push(`At the current pace roughly ${projectedShortfall} ${unit} will not be finished.`)
+    if (blocked.length) findings.push(`${blocked.length} blocked item${blocked.length === 1 ? '' : 's'} holding ${blockedPoints} ${unit}.`)
+    if (comp.addedDuringSprint > 0) findings.push(`${comp.addedDuringSprint} ${unit} were added after the sprint started (scope creep).`)
     if (overdue.length) findings.push(`${overdue.length} item${overdue.length === 1 ? ' is' : 's are'} past their due date.`)
     if (overloaded.length) findings.push(`${overloaded.map((o) => `${o.member.name} (${o.assigned}/${o.capacity} SP)`).join(', ')} ${overloaded.length === 1 ? 'is' : 'are'} over capacity.`)
     if (idle.length && remaining > 0) findings.push(`${idle.map((i) => i.member.name).join(', ')} ${idle.length === 1 ? 'has' : 'have'} nothing assigned in this sprint.`)
 
     // Recommendations
     if (blocked.length) {
-      const top = [...blocked].sort((a, b) => pts(b) - pts(a))[0]
-      recommendations.push(`Unblock "${top.title}" first — it is the largest blocked item (${pts(top)} SP)${top.blockedReason ? `: ${top.blockedReason}` : ''}.`)
+      const top = [...blocked].sort((a, b) => w(b) - w(a))[0]
+      recommendations.push(`Unblock "${top.title}" first${unestimated ? '' : ` — it is the largest blocked item (${pts(top)} SP)`}${top.blockedReason ? `: ${top.blockedReason}` : ''}.`)
     }
     if (projectedShortfall > 0) {
       let toMove = projectedShortfall
-      for (const i of notStarted.filter((i) => pts(i) > 0).sort((a, b) => pts(b) - pts(a))) {
+      for (const i of notStarted.filter((i) => w(i) > 0).sort((a, b) => w(b) - w(a))) {
         if (toMove <= 0) break
         moveCandidates.push(i)
         toMove -= pts(i)
       }
       if (moveCandidates.length) {
-        recommendations.push(`Move ${moveCandidates.map((i) => `"${i.title}" (${pts(i)} SP)`).join(', ')} to the next sprint to protect the sprint goal.`)
+        recommendations.push(`Move ${moveCandidates.map((i) => (unestimated ? `"${i.title}"` : `"${i.title}" (${pts(i)} SP)`)).join(', ')} to the next sprint to protect the sprint goal.`)
       } else {
         recommendations.push('All remaining work has already started — negotiate scope with the Product Owner or add capacity.')
       }
@@ -282,7 +297,7 @@ export function sprintHealth(
   } else if (sprint.status === 'completed') {
     findings.push(`Delivered ${comp.completed} of ${comp.committed} committed SP (${pct(comp.completed, comp.committed || 1)}%).`)
     if (comp.carriedOver) findings.push(`${comp.carriedOver} SP carried over to the next sprint.`)
-    if (comp.addedDuringSprint) findings.push(`${comp.addedDuringSprint} SP were added mid-sprint.`)
+    if (comp.addedDuringSprint) findings.push(`${comp.addedDuringSprint} ${unit} were added mid-sprint.`)
   } else {
     findings.push(`Planned: ${totalScope} SP against a capacity of ${sprint.capacity} SP.`)
     if (sprint.capacity && totalScope > sprint.capacity) recommendations.push(`Committed ${totalScope} SP exceeds capacity ${sprint.capacity} SP — trim ${totalScope - sprint.capacity} SP before starting.`)
@@ -317,11 +332,17 @@ export function sprintHealth(
   }
 }
 
+/** '8 SP, ' normally; empty when the set has no estimates. */
+function spLabel(its: WorkItem[]): (i: WorkItem) => string {
+  return isUnestimated(its) ? () => '' : (i) => `${pts(i)} SP, `
+}
+
 /* ---------- sprint summary (report text) ---------- */
 
 export function sprintSummary(sprint: Sprint, items: WorkItem[], members: Member[], history: VelocityPoint[], today: string = dayKey()): string {
   const h = sprintHealth(sprint, items, members, history, today)
   const its = sprintItems(sprint, items)
+  const sp = spLabel(its)
   const name = (id?: string) => members.find((m) => m.id === id)?.name ?? 'Unassigned'
   const done = its.filter(isDone)
   const open = its.filter((i) => !isDone(i))
@@ -334,11 +355,11 @@ export function sprintSummary(sprint: Sprint, items: WorkItem[], members: Member
   lines.push(`Items: ${done.length} done, ${open.length} open`)
   lines.push('')
   lines.push('Completed:')
-  if (done.length) done.forEach((i) => lines.push(`  • ${i.title} (${pts(i)} SP, ${name(i.assigneeId)})`))
+  if (done.length) done.forEach((i) => lines.push(`  • ${i.title} (${sp(i)}${name(i.assigneeId)})`))
   else lines.push('  • nothing yet')
   lines.push('')
   lines.push('Not completed:')
-  if (open.length) open.forEach((i) => lines.push(`  • ${i.title} (${pts(i)} SP, ${name(i.assigneeId)}${i.blocked || i.status === 'blocked' ? ', BLOCKED' : ''})`))
+  if (open.length) open.forEach((i) => lines.push(`  • ${i.title} (${sp(i)}${name(i.assigneeId)}${i.blocked || i.status === 'blocked' ? ', BLOCKED' : ''})`))
   else lines.push('  • none')
   if (h.blocked.length) {
     lines.push('')
@@ -380,6 +401,7 @@ export function answerQuestion(question: string, ctx: AssistantContext): Assista
     return { title: 'No sprint selected', body: ['Create or start a sprint first — the assistant reasons over the current sprint\'s data.'] }
   }
   const h = sprintHealth(sprint, items, members, history, today)
+  const sp = spLabel(sprintItems(sprint, items))
 
   if (/velocity|trend|slow|faster|decreas|increas/.test(q)) {
     if (!history.length) return { title: 'Velocity', body: ['No completed sprints yet, so there is no velocity history. Complete a sprint to start the trend.'] }
@@ -397,8 +419,8 @@ export function answerQuestion(question: string, ctx: AssistantContext): Assista
   if (/block/.test(q)) {
     if (!h.blocked.length) return { title: 'Blockers', body: ['No items are blocked in this sprint.'], risk: 'low' }
     return {
-      title: `${h.blocked.length} blocker${h.blocked.length === 1 ? '' : 's'} (${h.blockedPoints} SP)`,
-      body: h.blocked.map((i) => `• ${i.title} — ${pts(i)} SP, ${name(i.assigneeId)}${i.blockedReason ? `: ${i.blockedReason}` : ''}`).concat(['', h.recommendations[0] ?? '']),
+      title: `${h.blocked.length} blocker${h.blocked.length === 1 ? '' : 's'}${isUnestimated(sprintItems(sprint, items)) ? '' : ` (${h.blockedPoints} SP)`}`,
+      body: h.blocked.map((i) => `• ${i.title} — ${sp(i)}${name(i.assigneeId)}${i.blockedReason ? `: ${i.blockedReason}` : ''}`).concat(['', h.recommendations[0] ?? '']),
       risk: h.blockedPoints > h.remaining * 0.3 ? 'high' : 'medium',
     }
   }
@@ -419,7 +441,7 @@ export function answerQuestion(question: string, ctx: AssistantContext): Assista
         if (i.dueDate && i.dueDate < today) why.push('overdue')
         if (!isStarted(i)) why.push('not started')
         if (h.overloaded.some((o) => o.member.id === i.assigneeId)) why.push('assignee overloaded')
-        return `• ${i.title} — ${pts(i)} SP, ${name(i.assigneeId)} (${why.join(', ')})`
+        return `• ${i.title} — ${sp(i)}${name(i.assigneeId)} (${why.join(', ')})`
       }),
       risk: h.risk,
     }
@@ -428,7 +450,7 @@ export function answerQuestion(question: string, ctx: AssistantContext): Assista
     if (!h.moveCandidates.length) return { title: 'Nothing to move', body: ['Projection says the sprint can be completed at the current pace, or all remaining items are already in progress.'], risk: h.risk }
     return {
       title: `Move ${sumPoints(h.moveCandidates)} SP out`,
-      body: h.moveCandidates.map((i) => `• ${i.title} — ${pts(i)} SP, ${name(i.assigneeId)}, ${i.status}`).concat(['', `Projected shortfall is ${h.projectedShortfall} SP; these not-started items cover it.`]),
+      body: h.moveCandidates.map((i) => `• ${i.title} — ${sp(i)}${name(i.assigneeId)}, ${i.status}`).concat(['', `Projected shortfall is ${h.projectedShortfall} SP; these not-started items cover it.`]),
       risk: h.risk,
     }
   }

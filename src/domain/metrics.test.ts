@@ -163,3 +163,29 @@ describe('answerQuestion', () => {
     expect(answerQuestion('anything', { items: [], members: [], history: [] }).title).toMatch(/No sprint/)
   })
 })
+
+describe('unestimated work (migrated from an action tracker)', () => {
+  const members = [member('m1', 10)]
+  const items = [
+    item({ id: 'a', sprintId: 's1', status: 'done', completedAt: '2026-09-03T00:00:00Z', assigneeId: 'm1' }),
+    item({ id: 'b', sprintId: 's1', status: 'inprogress', assigneeId: 'm1' }),
+    item({ id: 'c', sprintId: 's1', status: 'blocked', blocked: true, blockedReason: 'waiting', assigneeId: 'm1' }),
+    item({ id: 'd', sprintId: 's1', status: 'todo' }),
+  ]
+  it('counts items when nothing has points', () => {
+    const h = sprintHealth({ ...sprint, committedPoints: undefined }, items, members, [], '2026-09-05')
+    expect(h.committed).toBe(4)
+    expect(h.completed).toBe(1)
+    expect(h.remaining).toBe(3)
+    expect(h.blockedPoints).toBe(1)
+    expect(h.findings[0]).toMatch(/No story points/)
+    expect(h.findings.join(' ')).toMatch(/1 of 4 items done/)
+    expect(burndown({ ...sprint, committedPoints: undefined }, items, '2026-09-05')[0].scope).toBe(4)
+    expect(workload(sprint, items, members)[0].assigned).toBe(3)
+  })
+  it('does not print "0 SP" in assistant answers', () => {
+    const a = answerQuestion('blockers', { sprint, items, members, history: [], today: '2026-09-05' })
+    expect(a.title).toBe('1 blocker')
+    expect(a.body[0]).not.toMatch(/0 SP/)
+  })
+})

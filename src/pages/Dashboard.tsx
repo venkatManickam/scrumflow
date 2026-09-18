@@ -1,11 +1,10 @@
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { AlertOctagon, CalendarClock, ClipboardList, Sparkles } from 'lucide-react'
-import { formatDistanceToNow, parseISO } from 'date-fns'
 import { useStore } from '../data/store'
 import { useActiveSprint, useCurrentMember, useCurrentProject, useMemberMap, useProjectItems, useProjectMembers, useProjectSprints, useVelocityHistory } from '../data/hooks'
 import { burndown, isDone, sprintCompletion, sprintHealth, sumPoints, velocity, workload } from '../domain/metrics'
-import { dayKey, daysBetween, niceDate, relativeDays } from '../domain/dates'
+import { dayKey, daysBetween, niceDate, relativeDays, friendlyDate } from '../domain/dates'
 import { STATUS_LABEL, itemKey, type Activity, type Status } from '../domain/types'
 import { Avatar, Card, EmptyState, KPI, PageHeader, Progress, RiskPill, StatusBadge, TypeIcon } from '../ui/primitives'
 import { useItemDrawer } from '../app/useItemDrawer'
@@ -18,13 +17,7 @@ function greeting() {
   return 'Good evening'
 }
 
-function ago(iso: string) {
-  try {
-    return formatDistanceToNow(parseISO(iso), { addSuffix: true })
-  } catch {
-    return iso
-  }
-}
+const ago = (iso: string) => friendlyDate(iso)
 
 export function Dashboard() {
   const project = useCurrentProject()

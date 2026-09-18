@@ -49,6 +49,25 @@ export function shortDate(d?: string): string {
   }
 }
 
+/** Call-friendly absolute date: "Today", "Yesterday", else "17 Sep 2026". Never "24 days ago". */
+export function friendlyDate(iso?: string, today = dayKey()): string {
+  if (!iso) return '—'
+  const key = dayKey(iso)
+  if (key === today) return 'Today'
+  if (key === dayKey(shiftDays(today, -1))) return 'Yesterday'
+  return niceDate(iso)
+}
+
+/** Tracker-style date "18-09-2026" (DD-MM-YYYY), for pasting back into the Excel update column. */
+export function dmyDate(iso?: string): string {
+  if (!iso) return ''
+  try {
+    return format(parseISO(iso), 'dd-MM-yyyy')
+  } catch {
+    return iso
+  }
+}
+
 export function relativeDays(target: string, today = dayKey()): string {
   const n = daysBetween(today, target)
   if (n === 0) return 'today'

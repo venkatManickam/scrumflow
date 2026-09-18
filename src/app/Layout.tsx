@@ -9,7 +9,7 @@ import { CommandPalette } from './CommandPalette'
 import { ItemForm } from './ItemForm'
 import { ItemDrawer } from './ItemDrawer'
 import { useItemDrawer } from './useItemDrawer'
-import { formatDistanceToNow, parseISO } from 'date-fns'
+import { friendlyDate } from '../domain/dates'
 
 const NAV_ITEMS = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard },
@@ -194,7 +194,7 @@ function NotificationsMenu() {
                     }}
                   >
                     <div className="text-slate-700 dark:text-slate-200">{n.text}</div>
-                    <div className="text-[10px] text-slate-400">{formatDistanceToNow(parseISO(n.at), { addSuffix: true })}</div>
+                    <div className="text-[10px] text-slate-400">{friendlyDate(n.at)}</div>
                   </button>
                 </li>
               ))}

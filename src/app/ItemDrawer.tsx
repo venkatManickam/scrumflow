@@ -1,25 +1,20 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { AlertOctagon, Link2, MessageSquare, Plus, Trash2 } from 'lucide-react'
+import { AlertOctagon, ClipboardCopy, Link2, MessageSquare, Plus, Trash2 } from 'lucide-react'
 import { useStore } from '../data/store'
 import { useCurrentProject, useMemberMap, useProjectItems, useProjectMembers, useProjectSprints } from '../data/hooks'
 import type { ItemType, Priority, Status, WorkItem } from '../domain/types'
 import { ITEM_TYPES, ITEM_TYPE_LABEL, PRIORITIES, PRIORITY_LABEL, STATUSES, STATUS_LABEL, itemKey } from '../domain/types'
-import { niceDate, relativeDays, dayKey } from '../domain/dates'
+import { niceDate, relativeDays, dayKey, friendlyDate, dmyDate } from '../domain/dates'
 import { Avatar, Drawer, Field, Points, StatusBadge, TypeIcon } from '../ui/primitives'
 import { confirmDialog } from '../ui/confirm'
 import { toast } from '../ui/toast'
 import { useItemDrawer } from './useItemDrawer'
 import { ItemForm } from './ItemForm'
-import { formatDistanceToNow, parseISO } from 'date-fns'
+import { copyText } from '../ui/clipboard'
 
-function ago(iso: string) {
-  try {
-    return formatDistanceToNow(parseISO(iso), { addSuffix: true })
-  } catch {
-    return iso
-  }
-}
+/** Dates are shown as real dates (never "x days ago") so they can be read out in the call. */
+const ago = (iso: string) => friendlyDate(iso)
 
 export function ItemDrawer() {
   const { itemId, open: openItem, close } = useItemDrawer()
@@ -118,7 +113,8 @@ function ItemDetail({ item, onOpen, onClose }: { item: WorkItem; onOpen: (id: st
           onBlur={() => title.trim() && title !== item.title && patch({ title: title.trim() })}
         />
         <div className="-mt-3 px-2 text-xs text-slate-500 dark:text-slate-400" data-testid="last-updated">
-          Last updated <span className="font-semibold text-slate-700 dark:text-slate-200">{niceDate(lastUpdated)}</span> · {ago(lastUpdated)}
+          Last updated <span className="font-semibold text-slate-700 dark:text-slate-200">{friendlyDate(lastUpdated)}</span>
+          {friendlyDate(lastUpdated) !== niceDate(lastUpdated) ? ` (${niceDate(lastUpdated)})` : ''}
           {lastUpdatedBy ? ` · by ${lastUpdatedBy}` : ''}
           {item.completedAt ? ` · completed ${niceDate(item.completedAt)}` : ''}
         </div>
@@ -240,9 +236,19 @@ function ItemDetail({ item, onOpen, onClose }: { item: WorkItem; onOpen: (id: st
         </section>
 
         <section>
-          <div className="label">
-            <MessageSquare size={12} className="mr-1 inline" />
-            Comments · {itemComments.length}
+          <div className="mb-2 flex items-center justify-between">
+            <div className="label mb-0">
+              <MessageSquare size={12} className="mr-1 inline" />
+              Updates · {itemComments.length}
+            </div>
+            <button
+              className="btn-ghost btn-sm"
+              title="Copy all updates as dated lines (DD-MM-YYYY: text), the tracker format"
+              disabled={itemComments.length === 0}
+              onClick={() => copyText([`${itemKey(project, item)} ${item.title}`, ...itemComments.map((c) => `${dmyDate(c.createdAt)}: ${c.body}`)].join('\n'), 'Update log copied')}
+            >
+              <ClipboardCopy size={14} /> Copy update log
+            </button>
           </div>
           <ul className="space-y-3">
             {itemComments.map((c) => {
@@ -253,7 +259,7 @@ function ItemDetail({ item, onOpen, onClose }: { item: WorkItem; onOpen: (id: st
                   <div className="min-w-0 flex-1 rounded-lg bg-slate-50 px-3 py-2 dark:bg-slate-800/60">
                     <div className="flex items-center justify-between gap-2 text-xs text-slate-500">
                       <span>
-                        <span className="font-semibold text-slate-700 dark:text-slate-200">{author?.name ?? 'Unknown'}</span> · {ago(c.createdAt)}
+                        <span className="font-semibold text-slate-700 dark:text-slate-200">{friendlyDate(c.createdAt)}</span> · {author?.name ?? 'Unknown'}
                       </span>
                       {c.authorId === currentMemberId && (
                         <button className="text-slate-400 hover:text-red-500" onClick={() => deleteComment(c.id)} aria-label="Delete comment">

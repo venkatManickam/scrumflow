@@ -94,6 +94,10 @@ function ItemDetail({ item, onOpen, onClose }: { item: WorkItem; onOpen: (id: st
   const childPoints = children.reduce((a, c) => a + (c.points ?? 0), 0)
   const childDone = children.filter((c) => c.status === 'done').length
   const overdue = item.dueDate && item.status !== 'done' && item.dueDate < dayKey()
+  // Last activity on this item: the item's own updatedAt or its newest comment, whichever is later.
+  const lastComment = itemComments[itemComments.length - 1]
+  const lastUpdated = lastComment && lastComment.createdAt > item.updatedAt ? lastComment.createdAt : item.updatedAt
+  const lastUpdatedBy = lastComment && lastComment.createdAt >= item.updatedAt ? memberMap.get(lastComment.authorId ?? '')?.name : undefined
 
   const remove = async () => {
     const ok = await confirmDialog({ title: `Delete ${itemKey(project, item)}?`, message: children.length ? `${children.length} child item(s) will be detached, not deleted.` : 'This cannot be undone.', confirmLabel: 'Delete', danger: true })
@@ -113,6 +117,11 @@ function ItemDetail({ item, onOpen, onClose }: { item: WorkItem; onOpen: (id: st
           onChange={(e) => setTitle(e.target.value)}
           onBlur={() => title.trim() && title !== item.title && patch({ title: title.trim() })}
         />
+        <div className="-mt-3 px-2 text-xs text-slate-500 dark:text-slate-400" data-testid="last-updated">
+          Last updated <span className="font-semibold text-slate-700 dark:text-slate-200">{niceDate(lastUpdated)}</span> · {ago(lastUpdated)}
+          {lastUpdatedBy ? ` · by ${lastUpdatedBy}` : ''}
+          {item.completedAt ? ` · completed ${niceDate(item.completedAt)}` : ''}
+        </div>
 
         {(item.blocked || item.status === 'blocked') && (
           <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
@@ -431,8 +440,8 @@ function ItemDetail({ item, onOpen, onClose }: { item: WorkItem; onOpen: (id: st
             </div>
           )}
           <div className="flex justify-between">
-            <dt>Updated</dt>
-            <dd>{ago(item.updatedAt)}</dd>
+            <dt>Last updated</dt>
+            <dd title={ago(lastUpdated)}>{niceDate(lastUpdated)}</dd>
           </div>
         </dl>
         <div className="flex items-center justify-between border-t border-slate-200 pt-3 dark:border-slate-800">

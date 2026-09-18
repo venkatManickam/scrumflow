@@ -5,11 +5,11 @@
       "name": "TSAT webMethods Tracker",
       "description": "Updated with the 18-Sep-2026 daily scrum MoM",
       "file": "tsat.enc.json",
-      "updatedAt": "2026-09-18T08:58:22.744Z",
+      "updatedAt": "2026-09-18T09:05:58.053Z",
       "stats": {
         "projects": 7,
         "items": 160,
-        "members": 17,
+        "members": 16,
         "sprints": 14
       }
     }

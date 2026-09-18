@@ -1,0 +1,17 @@
+{
+  "workspaces": [
+    {
+      "id": "tsat",
+      "name": "TSAT webMethods Tracker",
+      "description": "",
+      "file": "tsat.enc.json",
+      "updatedAt": "2026-09-18T06:19:39.017Z",
+      "stats": {
+        "projects": 7,
+        "items": 134,
+        "members": 17,
+        "sprints": 14
+      }
+    }
+  ]
+}

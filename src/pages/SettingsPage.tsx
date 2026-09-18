@@ -135,6 +135,14 @@ export function SettingsPage() {
                 </a>
               </dd>
             </div>
+            <div className="flex justify-between">
+              <dt className="text-slate-500">Classic tool</dt>
+              <dd>
+                <a className="text-brand-600 hover:underline" href={`${import.meta.env.BASE_URL}classic/`} target="_blank" rel="noreferrer">
+                  Scrum Command Center (Excel-tracker based)
+                </a>
+              </dd>
+            </div>
           </dl>
           <p className="mt-3 rounded-lg bg-slate-50 p-3 text-xs text-slate-600 dark:bg-slate-800/60 dark:text-slate-300">All data stays in this browser's IndexedDB; nothing is sent anywhere. Use backups to move between devices.</p>
           <div className="mt-3">

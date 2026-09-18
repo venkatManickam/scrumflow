@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Scrum Command Center Pro — TSAT / BY Program (hosted copy)</title>
+  <link rel="icon" type="image/svg+xml" href="../favicon.svg" />
+<link rel="stylesheet" href="css/style.css">
+<script src="js/vendor/xlsx.full.min.js"></script>
+<script src="js/vendor/exceljs.min.js"></script>
+<script src="js/vendor/chart.umd.min.js"></script>
+<script src="js/vendor/jspdf.umd.min.js"></script>
+<script src="js/vendor/jspdf.plugin.autotable.min.js"></script>
+</head>
+<body>
+<div class="app">
+
+  <div class="topbar">
+    <div class="brand">
+      <div class="logo">S</div>
+      <div><h1>Scrum Command Center <span class="ver">PRO</span></h1>
+      <div class="sub">TSAT / BY Program · offline project intelligence</div></div>
+    </div>
+    <div class="topbar-actions">
+      <div class="gs-wrap">
+        <input id="globalSearch" placeholder="🔍 Search everything…  ( / )" autocomplete="off">
+        <div class="gs-drop hidden" id="gsResults"></div>
+      </div>
+      <span id="dirtyFlag" class="dirty-flag hidden">● Unsaved changes</span>
+      <button class="btn btn-ghost hidden" id="saveBtn" onclick="saveState()">💾 Save</button>
+      <div class="scale-group" title="Interface size">
+        <button class="icon-btn scale-btn" onclick="fontScale(-1)">A−</button>
+        <button class="icon-btn scale-btn" onclick="fontScale(1)">A+</button>
+      </div>
+      <button class="icon-btn" id="wallBtn" onclick="startWall()" title="Wall Mode — full-screen command center">📺</button>
+      <button class="icon-btn" id="themeBtn" onclick="toggleTheme()" title="Toggle dark mode">🌙</button>
+    </div>
+  </div>
+
+  <!-- ============ UPLOAD / CONNECT ============ -->
+  <div id="uploadView">
+    <div class="hero">
+      <h2>Connect your tracker once. Refresh forever.</h2>
+      <p>Point the tool at your OneDrive-synced tracker file — then one click refreshes to the latest team updates.</p>
+
+      <div class="connect-grid">
+        <div class="connect-card" id="connectCard">
+          <div class="cc-icon">🔗</div>
+          <strong>Connect synced file</strong>
+          <p>Pick the tracker from your local OneDrive/SharePoint sync folder. The tool remembers it — press Refresh anytime to reload the latest version.</p>
+          <button class="btn btn-primary" onclick="connectFile()">Connect tracker file</button>
+          <p class="cc-note" id="fsapiNote"></p>
+        </div>
+        <div class="dropzone" id="dropzone">
+          <div class="dz-icon">📥</div>
+          <strong>…or drop the Excel here</strong>
+          <p class="hint">One-time load without connecting</p>
+        </div>
+      </div>
+      <div class="privacy-note">🔒 100% offline — all libraries bundled, no internet required, data never leaves this computer</div>
+      <div style="margin-top:14px"><button class="btn btn-ghost" onclick="loadDemo()">🎭 Try with demo data (safe for screen-sharing)</button></div>
+    </div>
+  </div>
+  <input type="file" id="fileInput" accept=".xlsx,.xlsm,.xls" class="hidden">
+
+  <!-- ============ MAIN ============ -->
+  <div id="mainView" class="hidden">
+
+    <div class="filebar">
+      <div class="fb-left">
+        <span class="dot" id="connDot"></span>
+        <span class="fname" id="fileLabel"></span>
+        <span class="fmeta" id="fileMeta"></span>
+      </div>
+      <div class="fb-actions">
+        <button class="btn btn-primary btn-sm" id="refreshBtn" onclick="refreshFile()">🔄 Refresh from file</button>
+        <button class="btn btn-primary btn-sm" onclick="writeBackToFile()">⬆ Save to Excel</button>
+        <button class="link-btn" id="awBtn" onclick="toggleAutoWrite()">⚡ Auto-write: ON</button>
+        <select id="autoRefreshSel" class="ar-select" onchange="setAutoRefresh(this.value)" title="Auto-refresh from connected file">
+          <option value="0">Auto: off</option><option value="5">Auto: 5 min</option>
+          <option value="15">Auto: 15 min</option><option value="30">Auto: 30 min</option>
+        </select>
+        <select id="recentSel" class="ar-select" onchange="openRecent(this.value)" title="Recently connected files">
+          <option value="">Recent files ▾</option>
+        </select>
+        <button class="link-btn" onclick="connectFile()">🔗 Connect different file</button>
+        <button class="link-btn" onclick="document.getElementById('fileInput').click()">↑ Manual load</button>
+        <button class="link-btn" onclick="backupJSON()">💾 Backup</button>
+        <button class="link-btn" onclick="document.getElementById('restoreInput').click()">⤴ Restore</button>
+        <button class="link-btn" onclick="clearSnapshot()">Reset comparison</button>
+        <button class="link-btn" style="color:var(--red-t)" onclick="disconnectFile()">⏏ Disconnect</button>
+      </div>
+    </div>
+    <input type="file" id="restoreInput" accept=".json" class="hidden">
+
+    <div class="kpi-row" id="kpiRow"></div>
+
+    <div class="nav" id="mainNav">
+      <button data-tab="tab-dash" class="active" onclick="showTab(this)">📈 Dashboard</button>
+      <button data-tab="tab-newtask" onclick="showTab(this)">➕ New Task</button>
+      <button data-tab="tab-plan" onclick="showTab(this)">📊 Plan / Gantt</button>
+      <button data-tab="tab-daily" onclick="showTab(this)">📅 Daily Log</button>
+      <button data-tab="tab-grid" onclick="showTab(this)">📆 Day Grid</button>
+      <button data-tab="tab-explorer" onclick="showTab(this)">🗃 Explorer</button>
+      <button data-tab="tab-changes" onclick="showTab(this)">🔄 Changed <span class="pill-badge hidden" id="changesBadge">0</span></button>
+      <button data-tab="tab-scrum" onclick="showTab(this)">📋 Scrum</button>
+      <button data-tab="tab-status" onclick="showTab(this)">📄 Report</button>
+      <button data-tab="tab-kanban" onclick="showTab(this)">🗂 Kanban</button>
+      <button data-tab="tab-team" onclick="showTab(this)">👥 Team</button>
+      <button data-tab="tab-attention" onclick="showTab(this)">⚠️ Attention <span class="pill-badge hidden" id="attnBadge">0</span></button>
+      <button data-tab="tab-tickets" onclick="showTab(this)">🎫 Tickets</button>
+      <button data-tab="tab-inventory" onclick="showTab(this)">🖥 Inventory</button>
+    </div>
+
+    <!-- DASHBOARD -->
+    <div class="panel active" id="tab-dash">
+      <div class="card"><h3>🚦 Project health</h3><div id="ragRow"></div></div>
+      <div class="grid-2">
+        <div class="card"><h3>Status distribution</h3><div class="chart-box"><canvas id="chStatus"></canvas></div></div>
+        <div class="card"><h3>Tasks by project area</h3><div class="chart-box"><canvas id="chSections"></canvas></div></div>
+      </div>
+      <div class="card"><h3>Active workload by owner</h3><div class="chart-box" style="height:300px"><canvas id="chOwners"></canvas></div></div>
+      <div class="grid-2">
+        <div class="card"><h3>📆 Daily update activity — last 14 days</h3><div class="chart-box"><canvas id="chActivity"></canvas></div></div>
+        <div class="card"><h3>🕒 Update recency</h3><div class="chart-box"><canvas id="chRecency"></canvas></div></div>
+      </div>
+    </div>
+
+    <!-- NEW TASK PAGE -->
+    <div class="panel" id="tab-newtask">
+      <div class="nt-wrap">
+        <div class="card">
+          <h3>➕ Create a new task</h3>
+          <div class="nt-grid">
+            <div class="m-field"><label>Project <span class="req">*</span></label>
+              <select id="ntProject"></select>
+              <button class="link-btn" style="padding:4px 0" onclick="openAddProject()">＋ create a new project instead</button>
+            </div>
+            <div class="m-field"><label>Person / Owner <span class="req">*</span></label>
+              <input id="ntOwner" list="ntOwners" placeholder="Pick a team member or type a name">
+              <datalist id="ntOwners"></datalist>
+            </div>
+            <div class="m-field nt-span2"><label>Activity / Issue title <span class="req">*</span></label>
+              <input id="ntTitle" placeholder="e.g. StockPosting interface — handle reversal scenario">
+            </div>
+            <div class="m-field"><label>Environment</label>
+              <select id="ntEnv"><option value="">—</option><option>DEV</option><option>QA</option><option>PROD</option><option>DR</option><option>All</option></select>
+            </div>
+            <div class="m-field"><label>Status</label>
+              <select id="ntStatus"><option value="open" selected>Open</option><option value="inprogress">In progress</option><option value="hold">On hold</option><option value="recurring">Recurring</option></select>
+            </div>
+            <div class="m-field"><label>Priority</label>
+              <select id="ntPrio"><option value="">—</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select>
+            </div>
+            <div class="m-field"><label>ETA</label>
+              <div class="eta-row">
+                <input type="date" id="ntEta">
+                <label class="tbd-check"><input type="checkbox" id="ntTbd" onchange="document.getElementById('ntEta').disabled=this.checked"> TBD</label>
+              </div>
+            </div>
+            <div class="m-field nt-span2"><label>First update (optional, dated automatically)</label>
+              <textarea id="ntUpd" placeholder="e.g. Requirement received from client, analysis started"></textarea>
+            </div>
+          </div>
+          <div class="btn-row" style="margin-top:6px;margin-bottom:0">
+            <button class="btn btn-primary" onclick="createTaskFromPage()">✓ Create task</button>
+            <button class="btn btn-ghost" onclick="clearTaskForm()">Clear</button>
+            <span class="res-count" id="ntHint">* required fields</span>
+          </div>
+        </div>
+        <div class="card">
+          <h3>🕐 Created this session <span class="count-chip" id="ntRecentCount">0</span></h3>
+          <div id="ntRecent"><div class="empty-state"><div class="es-icon">📝</div><p>Tasks you create will appear here. Remember: 💾 Save keeps them in the browser, ⬆ Save to Excel publishes them to the team.</p></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PLAN / GANTT -->
+    <div class="panel" id="tab-plan">
+      <div class="toolbar">
+        <label>Project</label>
+        <select id="planProject" onchange="renderPlan()"></select>
+        <button class="btn btn-primary btn-sm" onclick="openAddProject()">🗂 New project</button>
+        <button class="btn btn-primary btn-sm" onclick="openAddPhase()">＋ Add phase</button>
+        <button class="btn btn-ghost btn-sm" onclick="generateDefaultPlan()">✨ Generate default phases</button>
+        <button class="btn btn-ghost btn-sm" onclick="exportPlanXLSX()">⬇ Plan Excel</button>
+        <button class="btn btn-ghost btn-sm" onclick="exportGanttPDF()">⬇ Gantt PDF</button>
+        <span class="res-count" id="planMeta"></span>
+      </div>
+      <div class="card" style="padding:14px">
+        <div class="gantt-scroll" id="ganttWrap"></div>
+      </div>
+      <div class="card">
+        <h3>Phases <span class="count-chip" id="phaseCount"></span></h3>
+        <div id="phaseTable"></div>
+        <p style="font-size:11.5px;color:var(--text3);margin-top:12px">
+          💡 Excel sync: add a tab named <b>Project_Plan</b> in your tracker Excel with columns
+          <i>Project | Phase | Start Date | End Date | Progress % | Status | Owner | Milestone | Notes</i>
+          — the tool reads it on every load/refresh. "⬇ Full updated tracker" includes this sheet, so edits made here go back to SharePoint.
+        </p>
+      </div>
+    </div>
+
+    <!-- DAILY LOG -->
+    <div class="panel" id="tab-daily">
+      <div class="toolbar">
+        <div class="search-wrap"><span class="s-icon">🔍</span><input id="dlSearch" placeholder="Search updates, tasks, owners…" oninput="renderDaily()"></div>
+        <select id="dlSheet" onchange="renderDaily()"><option value="">All projects</option></select>
+        <select id="dlOwner" onchange="renderDaily()"><option value="">All owners</option></select>
+        <button class="btn btn-ghost btn-sm" onclick="exportDailyXLSX()">⬇ Excel</button>
+        <button class="btn btn-ghost btn-sm" onclick="exportDailyPDF()">⬇ PDF</button>
+        <span class="res-count" id="dlCount"></span>
+      </div>
+      <div class="datepick-row" id="dlDates"></div>
+      <div id="dailyTimeline"></div>
+    </div>
+
+    <!-- DAY GRID -->
+    <div class="panel" id="tab-grid">
+      <div class="toolbar">
+        <label>Rows by</label>
+        <select id="gridBasis" onchange="renderGrid()">
+          <option value="task">Task (grouped by sheet)</option>
+          <option value="owner">Owner / User</option>
+          <option value="sheet">Project</option>
+        </select>
+        <label>Days</label>
+        <select id="gridDays" onchange="renderGrid()">
+          <option value="7">Last 7</option><option value="14" selected>Last 14</option>
+          <option value="21">Last 21</option><option value="45">Last 45</option>
+        </select>
+        <select id="gridSheet" onchange="renderGrid()"><option value="">All projects</option></select>
+        <select id="gridOwner" onchange="renderGrid()"><option value="">All owners</option></select>
+        <button class="btn btn-ghost btn-sm" onclick="exportGridXLSX()">⬇ Excel</button>
+      </div>
+      <div class="card grid-scroll" style="padding:8px 4px"><table id="gridTable" class="pivot"></table></div>
+    </div>
+
+    <!-- EXPLORER -->
+    <div class="panel" id="tab-explorer">
+      <div class="toolbar">
+        <div class="search-wrap"><span class="s-icon">🔍</span><input id="exSearch" placeholder="Search anything…" oninput="renderExplorer()"></div>
+        <select id="exProject" onchange="renderExplorer()"><option value="">All projects</option></select>
+        <label>Group</label>
+        <select id="exGroup" onchange="renderExplorer()">
+          <option value="">None</option><option value="sheet">Project</option><option value="owner">Owner</option>
+          <option value="status">Status</option><option value="priority">Priority</option>
+          <option value="env">Environment</option><option value="lastdate">Last update date</option>
+        </select>
+        <select id="exStatus" onchange="renderExplorer()">
+          <option value="">All statuses</option><option value="inprogress">In progress</option>
+          <option value="open">Open</option><option value="completed">Completed</option>
+          <option value="hold">On hold</option><option value="recurring">Recurring</option>
+        </select>
+        <span class="res-count" id="exCount"></span>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-ghost btn-sm" onclick="exportCSV()">⬇ CSV</button>
+        <button class="btn btn-ghost btn-sm" onclick="exportXLSX()">⬇ Excel (filtered)</button>
+        <button class="btn btn-ghost btn-sm" onclick="exportTrackerXLSX()">⬇ Full updated tracker (.xlsx)</button>
+        <button class="btn btn-ghost btn-sm" onclick="exportExplorerPDF()">⬇ PDF</button>
+        <button class="btn btn-ghost btn-sm" onclick="toggleAllHist()">⤢ Expand histories</button>
+        <button class="btn btn-primary btn-sm" onclick="gotoNewTask()">＋ New task</button>
+        <button class="btn btn-ghost btn-sm" onclick="openAddProject()">🗂 New project</button>
+      </div>
+      <div class="card explorer-wrap" style="padding:8px 4px"><table id="exTable"></table></div>
+    </div>
+
+    <!-- CHANGES -->
+    <div class="panel" id="tab-changes">
+      <div class="card"><h3>🔄 Changes since last load <span class="count-chip" id="chgMeta"></span></h3><div id="changesList"></div></div>
+    </div>
+
+    <!-- SCRUM -->
+    <div class="panel" id="tab-scrum">
+      <div class="card">
+        <div class="btn-row">
+          <button class="btn btn-primary" onclick="startLiveScrum()">🎙 Start Live Scrum</button>
+          <button class="btn btn-primary" onclick="openMinutesModal()">📝 Paste minutes</button>
+          <button class="btn btn-ghost" onclick="copyText('scrumReport',this)">📋 Copy for Teams</button>
+          <button class="btn btn-ghost" onclick="downloadText('scrumReport','Scrum_Agenda')">⬇ TXT</button>
+          <button class="btn btn-ghost" onclick="exportReportPDF('scrumReport','Scrum Agenda')">⬇ PDF</button>
+          <button class="btn btn-ghost" onclick="printPanel('tab-scrum')">🖨 Print</button>
+        </div>
+        <div class="report-box" id="scrumReport"></div>
+      </div>
+    </div>
+
+    <!-- STATUS -->
+    <div class="panel" id="tab-status">
+      <div class="toolbar">
+        <label>Project</label>
+        <select id="repProject" onchange="renderStatus();document.getElementById('weeklyReport').textContent='Click Generate to build the week-over-week summary…'"><option value="">All projects</option></select>
+        <label>Include</label>
+        <select id="repInclude" onchange="renderStatus()">
+          <option value="all">All items</option>
+          <option value="active">Active only (hide completed)</option>
+          <option value="high">High priority only</option>
+        </select>
+      </div>
+      <div class="card">
+        <div class="btn-row">
+          <button class="btn btn-primary" onclick="copyText('statusReport',this)">📋 Copy for Email</button>
+          <button class="btn btn-ghost" onclick="downloadText('statusReport','Status_Report')">⬇ TXT</button>
+          <button class="btn btn-ghost" onclick="exportReportPDF('statusReport','Status Report')">⬇ PDF</button>
+          <button class="btn btn-ghost" onclick="printPanel('tab-status')">🖨 Print</button>
+        </div>
+        <div class="report-box" id="statusReport"></div>
+      </div>
+      <div class="card">
+        <h3>📧 Weekly report for Mohit</h3>
+        <div class="btn-row">
+          <button class="btn btn-primary" onclick="generateWeeklyReport()">✨ Generate (this week vs last)</button>
+          <button class="btn btn-ghost" onclick="copyText('weeklyReport',this)">📋 Copy</button>
+          <button class="btn btn-ghost" onclick="downloadText('weeklyReport','Weekly_Report')">⬇ TXT</button>
+          <button class="btn btn-ghost" onclick="exportReportPDF('weeklyReport','Weekly Report')">⬇ PDF</button>
+        </div>
+        <div class="report-box" id="weeklyReport">Click Generate to build the week-over-week summary…</div>
+      </div>
+    </div>
+
+    <!-- KANBAN -->
+    <div class="panel" id="tab-kanban">
+      <div class="toolbar">
+        <div class="search-wrap"><span class="s-icon">🔍</span><input id="kbSearch" placeholder="Search tasks, owners…" oninput="renderKanban()"></div>
+        <select id="kbSheet" onchange="renderKanban()"><option value="">All projects</option></select>
+        <select id="kbOwner" onchange="renderKanban()"><option value="">All owners</option></select>
+        <select id="kbPrio" onchange="renderKanban()"><option value="">All priorities</option><option value="high">High only</option></select>
+        <span class="res-count">💡 Drag cards between columns to change status</span>
+      </div>
+      <div class="kanban" id="kanbanBoard"></div>
+    </div>
+
+    <!-- TEAM -->
+    <div class="panel" id="tab-team"><div class="team-grid" id="teamGrid"></div></div>
+
+    <!-- ATTENTION -->
+    <div class="panel" id="tab-attention">
+      <div class="card"><h3>🚨 ETA breached <span class="count-chip" id="etaCount"></span></h3><div id="etaTable"></div></div>
+      <div class="card"><h3>⏰ Stale — no update in 3+ days <span class="count-chip" id="staleCount"></span></h3><div id="staleTable"></div></div>
+      <div class="card"><h3>⏸ On hold <span class="count-chip" id="holdCount"></span></h3><div id="holdTable"></div></div>
+      <div class="card"><h3>👤 Missing owner / empty update <span class="count-chip" id="missCount"></span></h3><div id="missTable"></div></div>
+    </div>
+
+    <!-- TICKETS -->
+    <div class="panel" id="tab-tickets">
+      <div class="card"><h3>🎫 Open service tickets <span class="count-chip" id="openTixCount"></span></h3><div id="openTix"></div></div>
+      <div class="card"><h3>✅ Recently closed</h3><div id="closedTix"></div></div>
+    <!-- INVENTORY -->
+    <div class="panel" id="tab-inventory">
+      <div class="toolbar">
+        <div class="search-wrap"><span class="s-icon">🔍</span><input id="invSearch" placeholder="Search app, VM, IP…" oninput="renderInventory()"></div>
+        <span class="res-count" id="invCount"></span>
+      </div>
+      <div class="datepick-row" id="invEnvChips"></div>
+      <div id="invTiles"></div>
+      <p style="font-size:11.5px;color:var(--text3);margin-top:10px">🔒 Only entries with valid HTTP/HTTPS links are shown · credentials from the source sheet are intentionally NOT stored in this tool · click a tile to open the console (HTTPS preferred)</p>
+    </div>
+
+  </div>
+</div>
+
+<!-- ============ WALL MODE ============ -->
+<div class="wall hidden" id="wallOverlay">
+  <div class="wall-head">
+    <div class="wall-brand"><span class="wall-logo">S</span> SCRUM COMMAND CENTER <span class="wall-live">● LIVE</span></div>
+    <div class="wall-clock" id="wallClock">--:--:--</div>
+    <div class="wall-date" id="wallDate"></div>
+    <button class="wall-close" onclick="stopWall()" title="Exit (Esc)">✕</button>
+  </div>
+  <div class="wall-kpis" id="wallKpis"></div>
+  <div class="wall-main">
+    <div class="wall-rag" id="wallRag"></div>
+    <div class="wall-spot" id="wallSpot"></div>
+  </div>
+  <div class="wall-ticker-wrap"><div class="wall-ticker" id="wallTicker"></div></div>
+</div>
+
+<!-- ============ LIVE SCRUM OVERLAY ============ -->
+<div class="ls-overlay hidden" id="lsOverlay">
+  <div class="ls-head">
+    <div class="ls-title">🎙 Live Scrum · <span id="lsProgress"></span></div>
+    <div class="ls-timer" id="lsTimer">2:00</div>
+    <div class="ls-head-actions">
+      <select id="lsMinutes" onchange="lsResetTimer()">
+        <option value="60">1 min / person</option>
+        <option value="120" selected>2 min / person</option>
+        <option value="180">3 min / person</option>
+      </select>
+      <button class="btn btn-ghost btn-sm" onclick="endLiveScrum()">✕ End scrum</button>
+    </div>
+  </div>
+  <div class="ls-timerbar"><div class="ls-timerbar-fill" id="lsTimerFill"></div></div>
+  <div class="ls-body" id="lsBody"></div>
+  <div class="ls-foot">
+    <button class="btn btn-ghost" onclick="lsPrev()">← Previous</button>
+    <div class="ls-note-row">
+      <select id="lsTaskSel"></select>
+      <input id="lsNote" placeholder="Click a task above, then type the update… (Enter saves with today's date)" onkeydown="if(event.key==='Enter')lsAddNote()">
+      <button class="btn btn-primary btn-sm" onclick="lsAddNote()">＋ Save update</button>
+    </div>
+    <button class="btn btn-primary" onclick="lsNext()">Next →</button>
+  </div>
+</div>
+
+<!-- ============ MODALS ============ -->
+<div class="modal-backdrop hidden" id="modalBackdrop" onclick="if(event.target===this)closeModal()">
+  <div class="modal" id="modalBox">
+    <h3 id="modalTitle">Add update</h3>
+    <div id="modalBody"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" id="modalOk">Save</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/app.js"></script>
+</body>
+</html>

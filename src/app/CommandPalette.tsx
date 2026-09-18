@@ -26,6 +26,7 @@ export const NAV: { to: string; label: string }[] = [
   { to: '/retro', label: 'Retrospective' },
   { to: '/team', label: 'Team' },
   { to: '/projects', label: 'Projects' },
+  { to: '/shared', label: 'Shared workspaces' },
   { to: '/settings', label: 'Settings' },
 ]
 

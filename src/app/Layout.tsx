@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import clsx from 'clsx'
-import { BarChart3, Bell, CalendarRange, FolderKanban, KanbanSquare, LayoutDashboard, ListTodo, Menu, Mic, Moon, Plus, RotateCcw, Search, Settings, Sun, Users, X, Zap } from 'lucide-react'
+import { BarChart3, Bell, CalendarRange, FolderKanban, KanbanSquare, LayoutDashboard, ListTodo, Menu, Mic, Moon, Plus, RotateCcw, Search, Settings, Share2, Sun, Users, X, Zap } from 'lucide-react'
 import { useStore } from '../data/store'
 import { useCurrentProject, useCurrentMember } from '../data/hooks'
 import { Avatar } from '../ui/primitives'
@@ -21,6 +21,7 @@ const NAV_ITEMS = [
   { to: '/retro', label: 'Retrospective', icon: RotateCcw },
   { to: '/team', label: 'Team', icon: Users },
   { to: '/projects', label: 'Projects', icon: FolderKanban },
+  { to: '/shared', label: 'Shared workspaces', icon: Share2 },
   { to: '/settings', label: 'Settings', icon: Settings },
 ]
 

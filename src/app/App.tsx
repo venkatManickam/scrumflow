@@ -13,6 +13,7 @@ import { Retro } from '../pages/Retro'
 import { Team } from '../pages/Team'
 import { Projects } from '../pages/Projects'
 import { SettingsPage } from '../pages/SettingsPage'
+import { Shared } from '../pages/Shared'
 import { AssistantPanel } from './AssistantPanel'
 
 function useTheme() {
@@ -59,6 +60,7 @@ export default function App() {
           <Route path="/team" element={<Team />} />
           <Route path="/projects" element={<Projects />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/shared/:id?" element={<Shared />} />
           <Route path="*" element={<Dashboard />} />
         </Routes>
       </Layout>

@@ -37,7 +37,7 @@ afterAll(() => {
   console.error = origError
 })
 
-const ROUTES = ['/', '/backlog', '/sprints', '/board', '/standup', '/reports', '/retro', '/team', '/projects', '/settings']
+const ROUTES = ['/', '/backlog', '/sprints', '/board', '/standup', '/reports', '/retro', '/team', '/projects', '/settings', '/shared']
 
 describe('App smoke test (every page renders on the demo workspace)', () => {
   it('boots into the demo workspace and renders every route without throwing', async () => {

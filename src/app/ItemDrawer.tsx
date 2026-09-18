@@ -20,7 +20,7 @@ export function ItemDrawer() {
   const { itemId, open: openItem, close } = useItemDrawer()
   const item = useStore((s) => s.items.find((i) => i.id === itemId))
   return (
-    <Drawer open={!!itemId} onClose={close} title={item ? <DrawerTitle item={item} /> : <span className="text-sm text-slate-500">Item not found</span>}>
+    <Drawer open={!!itemId} onClose={close} placement="center" width="max-w-5xl" title={item ? <DrawerTitle item={item} /> : <span className="text-sm text-slate-500">Item not found</span>}>
       {item ? <ItemDetail item={item} onOpen={openItem} onClose={close} /> : <div className="p-6 text-sm text-slate-500">This item no longer exists.</div>}
     </Drawer>
   )

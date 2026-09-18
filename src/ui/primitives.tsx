@@ -190,12 +190,18 @@ export function Modal({ open, onClose, title, children, footer, size = 'md' }: {
   )
 }
 
-export function Drawer({ open, onClose, title, children, width = 'max-w-2xl' }: { open: boolean; onClose: () => void; title?: ReactNode; children: ReactNode; width?: string }) {
+export function Drawer({ open, onClose, title, children, width = 'max-w-2xl', placement = 'right' }: { open: boolean; onClose: () => void; title?: ReactNode; children: ReactNode; width?: string; placement?: 'right' | 'center' }) {
   useEscape(onClose)
   if (!open) return null
+  const centered = placement === 'center'
   return (
-    <div className="fixed inset-0 z-40 flex justify-end bg-slate-900/40" onMouseDown={onClose}>
-      <div className={clsx('flex h-full w-full flex-col overflow-hidden bg-white shadow-2xl dark:bg-slate-900', width)} onMouseDown={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+    <div className={clsx('fixed inset-0 z-40 flex bg-slate-900/40', centered ? 'items-center justify-center p-3 md:p-6' : 'justify-end')} onMouseDown={onClose}>
+      <div
+        className={clsx('flex w-full flex-col overflow-hidden bg-white shadow-2xl dark:bg-slate-900', centered ? 'animate-fade-in h-full max-h-[92vh] rounded-2xl border border-slate-200 dark:border-slate-800' : 'h-full', width)}
+        onMouseDown={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+      >
         {title && (
           <header className="flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-3 dark:border-slate-800">
             <div className="min-w-0 flex-1">{title}</div>
